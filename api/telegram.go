@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 type Update struct {
@@ -21,10 +22,18 @@ type Chat struct {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	var update Update
-	json.NewDecoder(r.Body).Decode(&update)
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
-	if update.Message == nil {
+	var update Update
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if update.Message == nil || update.Message.Text == "" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -32,18 +41,24 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	botToken := os.Getenv("BOT_TOKEN")
 	adminID := os.Getenv("ADMIN_ID")
 
-	text := update.Message.Text
 	userID := update.Message.Chat.ID
+	userText := update.Message.Text
 
-	// رسالة ترسل للأدمن
-	if adminID != "" {
-		sendMessage(botToken, adminID,
-			"📩 رسالة جديدة:\n"+text+"\n\n👤 UserID: "+intToString(userID))
+	// إرسال رسالة للأدمن
+	if botToken != "" && adminID != "" {
+		sendMessage(
+			botToken,
+			adminID,
+			"📩 رسالة جديدة:\n\n"+userText+"\n\n👤 User ID: "+strconv.FormatInt(userID, 10),
+		)
 	}
 
 	// رد للمستخدم
-	sendMessage(botToken, intToString(userID),
-		"تم استلام رسالتك ✅\nسيتم الرد عليك قريبًا.")
+	sendMessage(
+		botToken,
+		strconv.FormatInt(userID, 10),
+		"✅ تم استلام رسالتك.\nسيتم الرد عليك قريبًا.",
+	)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -58,8 +73,4 @@ func sendMessage(token, chatID, text string) {
 
 	body, _ := json.Marshal(payload)
 	http.Post(url, "application/json", bytes.NewBuffer(body))
-}
-
-func intToString(id int64) string {
-	return json.Number(id).String()
 }
